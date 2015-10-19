@@ -225,7 +225,8 @@ static void bring_down_cpu(int cpu)
 
 	BUG_ON(cpu == 0);
 	cpu_action_time_ms = ktime_to_ms(ktime_get());
-	ret = cpu_down(cpu);
+	/*ret = cpu_down(cpu);*/
+	ret = 0;
 	if (ret) {
 		pr_debug("Error %d offline" "core %d\n", ret, cpu);
 	} else {
