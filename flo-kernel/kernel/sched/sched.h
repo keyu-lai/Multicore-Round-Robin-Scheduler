@@ -311,6 +311,14 @@ struct rt_rq {
 #endif
 };
 
+struct wrr_rq {
+	/* Nests inside the rq lock: */
+	raw_spinlock_t lock;
+
+	struct list_head queue;
+	unsigned int total_weight;
+};
+
 #ifdef CONFIG_SMP
 
 /*
@@ -372,6 +380,7 @@ struct rq {
 
 	struct cfs_rq cfs;
 	struct rt_rq rt;
+	struct wrr_rq wrr;
 
 #ifdef CONFIG_FAIR_GROUP_SCHED
 	/* list of leaf cfs_rq on this cpu: */
@@ -855,6 +864,7 @@ enum cpuacct_stat_index {
 
 extern const struct sched_class stop_sched_class;
 extern const struct sched_class rt_sched_class;
+extern const struct sched_class wrr_sched_class;
 extern const struct sched_class fair_sched_class;
 extern const struct sched_class idle_sched_class;
 
