@@ -39,16 +39,28 @@ static void
 enqueue_task_wrr(struct rq *rq, struct task_struct *p, int flags)
 {	
 	struct sched_wrr_entity *wrr_se = &p->wrr;
+	struct wrr_rq *rq_wrr = &rq->wrr;
 
 	wrr_se->time_slice = wrr_se->weight * BASE_TICKS;
-	raw_spin_lock(&wrr_se->rq->lock); /* the locking is mainly for later, part 2 */
-	list_add_tail(&wrr_se->run_list, &rq->wrr.queue);
-	raw_spin_unlock(&wrr_se->rq->lock);
+
+	raw_spin_lock(&rq_wrr->lock); /* the locking is mainly for later, part 2 */
+	rq_wrr->total_weight += wrr_se->weight;
+	list_add_tail(&wrr_se->run_list, &rq_wrr->queue);
+	raw_spin_unlock(&rq_wrr->lock);
 }
 
 static void
 dequeue_task_wrr(struct rq *rq, struct task_struct *p, int flags)
 {
+	struct sched_wrr_entity *wrr_se = &p->wrr;
+	struct wrr_rq *rq_wrr = &rq->wrr;
+
+	/* the locking is mainly for later, part 2 */
+	raw_spin_lock(&rq_wrr->lock); 
+	rq_wrr->total_weight -= wrr_se->weight;
+	wrr_se->time_slice = 0;
+	list_del(&wrr_se->run_list);
+	raw_spin_unlock(&rq_wrr->lock);	
 }
 
 static void put_prev_task_wrr(struct rq *rq, struct task_struct *prev)
@@ -57,8 +69,15 @@ static void put_prev_task_wrr(struct rq *rq, struct task_struct *prev)
 
 static void task_tick_wrr(struct rq *rq, struct task_struct *curr, int queued)
 {
-	curr->wrr.time_slice--; 
-	if (curr->wrr.time_slice == 0) {
+	struct sched_wrr_entity *wrr_se = &curr->wrr;
+
+	wrr_se->time_slice--; 
+	if (wrr_se->time_slice == 0) {
+		dequeue_task_wrr(rq, curr, 0);
+		enqueue_task_wrr(rq, curr, 0);
+
+		/* this lock is required by resched_task() */
+		/* but we could instead call set_tsk_need_resched() here ...? */
 		raw_spin_lock(&task_rq(curr)->lock);
 		resched_task(curr);
 		raw_spin_unlock(&task_rq(curr)->lock);
@@ -77,17 +96,20 @@ static bool is_foreground(struct task_struct *p)
 
 static void switched_to_wrr(struct rq *rq, struct task_struct *p)
 {
-	/* i think this is all we need to do when switching a task to use WRR */
 	p->wrr.rq = &rq->wrr;
 	p->wrr.weight = (is_foreground(p) ? WEIGHT_FG : WEIGHT_BG);
 	p->wrr.time_slice = 0;
 	INIT_LIST_HEAD(&p->wrr.run_list);
 }
 
+static void switched_from_wrr(struct rq *rq, struct task_struct *p)
+{
+	// TODO: implement this
+}
+
 static void
 prio_changed_wrr(struct rq *rq, struct task_struct *p, int oldprio)
 {
-	BUG();
 }
 
 static unsigned int get_rr_interval_wrr(struct rq *rq, struct task_struct *task)
@@ -106,6 +128,7 @@ const struct sched_class wrr_sched_class = {
 	.put_prev_task		= put_prev_task_wrr,
 #ifdef CONFIG_SMP
 	.select_task_rq		= select_task_rq_wrr,
+	.switched_from		= switched_from_wrr,
 #endif
 	.set_curr_task      = set_curr_task_wrr,
 	.task_tick			= task_tick_wrr,
