@@ -1740,6 +1740,11 @@ static void __sched_fork(struct task_struct *p)
 #ifdef CONFIG_PREEMPT_NOTIFIERS
 	INIT_HLIST_HEAD(&p->preempt_notifiers);
 #endif
+
+	/* set up part of wrr se when forking */
+	/* wrr.rq and wrr.weight are set in kernel/sched/sched.h:set_task_rq() */
+	p->wrr.time_slice = 0;
+	INIT_LIST_HEAD(&p->wrr.run_list);
 }
 
 /*
@@ -4059,7 +4064,9 @@ __setscheduler(struct rq *rq, struct task_struct *p, int policy, int prio)
 	p->normal_prio = normal_prio(p);
 	/* we are holding p->pi_lock already */
 	p->prio = rt_mutex_getprio(p);
-	if (rt_prio(p->prio))
+	if (policy == SCHED_WRR)
+		p->sched_class = &wrr_sched_class;
+	else if (rt_prio(p->prio))
 		p->sched_class = &rt_sched_class;
 	else
 		p->sched_class = &fair_sched_class;
@@ -4107,7 +4114,7 @@ recheck:
 
 		if (policy != SCHED_FIFO && policy != SCHED_RR &&
 				policy != SCHED_NORMAL && policy != SCHED_BATCH &&
-				policy != SCHED_IDLE)
+				policy != SCHED_IDLE && policy != SCHED_WRR)
 			return -EINVAL;
 	}
 
@@ -4785,6 +4792,7 @@ SYSCALL_DEFINE1(sched_get_priority_max, int, policy)
 	case SCHED_NORMAL:
 	case SCHED_BATCH:
 	case SCHED_IDLE:
+	case SCHED_WRR:
 		ret = 0;
 		break;
 	}
@@ -4810,6 +4818,7 @@ SYSCALL_DEFINE1(sched_get_priority_min, int, policy)
 	case SCHED_NORMAL:
 	case SCHED_BATCH:
 	case SCHED_IDLE:
+	case SCHED_WRR:
 		ret = 0;
 	}
 	return ret;
@@ -7039,6 +7048,15 @@ void __init sched_init(void)
 			rq->cpu_load[j] = 0;
 
 		rq->last_load_update_tick = jiffies;
+
+		/* handle wrr initialization here */
+		INIT_LIST_HEAD(&rq->wrr.queue);
+		rq->wrr.lock = __RAW_SPIN_LOCK_UNLOCKED(lock);
+		rq->wrr.total_weight = 0;
+		rq->wrr.enqueues = 0;
+		rq->wrr.dequeues = 0;
+		// we'll need to do some initialization for load balancing here
+		/* done with wrr */
 
 #ifdef CONFIG_SMP
 		rq->sd = NULL;

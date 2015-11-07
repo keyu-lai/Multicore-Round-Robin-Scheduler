@@ -1571,7 +1571,6 @@ long do_fork(unsigned long clone_flags,
 	struct task_struct *p;
 	int trace = 0;
 	long nr;
-
 	/*
 	 * Do some preliminary argument and permissions checking before we
 	 * actually start allocating stuff

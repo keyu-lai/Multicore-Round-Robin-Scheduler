@@ -312,11 +312,15 @@ struct rt_rq {
 };
 
 struct wrr_rq {
+	/* locking rule: when acquiring multiple wrr_rq locks,
+		acquire them in cpu_id order */	
 	/* Nests inside the rq lock: */
 	raw_spinlock_t lock;
 
 	struct list_head queue;
 	unsigned int total_weight;
+	int enqueues;
+	int dequeues;
 };
 
 #ifdef CONFIG_SMP
@@ -586,6 +590,10 @@ static inline void set_task_rq(struct task_struct *p, unsigned int cpu)
 	p->rt.rt_rq  = tg->rt_rq[cpu];
 	p->rt.parent = tg->rt_se[cpu];
 #endif
+	
+	/* change wrr se when task moves from fg/bg */
+	p->wrr.rq = &cpu_rq(smp_processor_id())->wrr;
+	p->wrr.weight = 10; //TODO: set this correctly based on fg/bg!
 }
 
 #else /* CONFIG_CGROUP_SCHED */

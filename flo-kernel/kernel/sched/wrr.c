@@ -8,9 +8,34 @@
 static int
 select_task_rq_wrr(struct task_struct *p, int sd_flag, int flags)
 {
-	/* we might need to change this when load balancing? */
-	/* i'm not sure yet when this function gets called. */
-	return task_cpu(p);
+	int i, lowest_weight = INT_MAX, lightest_load_cpu = -1;
+	struct rq *this_cpu_rq;
+	struct wrr_rq *this_cpu_wrr;
+
+	/* I don't like the fact that I have to grab every lock here,
+	 	so I wonder if there's a better way ... rt and cfs use rcu_read_lock
+	 	can we use that here? */
+
+	/* locking rule: when acquiring multiple wrr_rq locks,
+		acquire them in cpu_id order */
+	for_each_possible_cpu(i) {
+		this_cpu_rq = cpu_rq(i);
+		this_cpu_wrr = &this_cpu_rq->wrr;
+		raw_spin_lock(&this_cpu_wrr->lock);
+		printk("cpu %d weight: %d\n", i, this_cpu_wrr->total_weight);
+		if (this_cpu_wrr->total_weight < lowest_weight) {
+			lightest_load_cpu = i;
+			lowest_weight = this_cpu_wrr->total_weight;
+		}
+	}
+
+	for (i = num_possible_cpus() - 1; i >= 0; i--) {
+		this_cpu_rq = cpu_rq(i);
+		this_cpu_wrr = &this_cpu_rq->wrr;
+		raw_spin_unlock(&this_cpu_wrr->lock);
+	}
+	printk("choosing cpu %d\n", lightest_load_cpu);
+	return lightest_load_cpu;
 }
 #endif /* CONFIG_SMP */
 
@@ -28,10 +53,14 @@ static struct task_struct *pick_next_task_wrr(struct rq *rq)
 	struct list_head *queue = &rq->wrr.queue;
 	struct sched_wrr_entity *sched_ent;
 
-	if (list_empty(queue))
+	raw_spin_lock(&rq->wrr.lock); /* the locking is mainly for later, part 2 */
+	if (list_empty(queue)) {
+		raw_spin_unlock(&rq->wrr.lock);
 		return NULL;
+	}
 
 	sched_ent = list_first_entry(queue, struct sched_wrr_entity, run_list);
+	raw_spin_unlock(&rq->wrr.lock);	
 	return wrr_task_of(sched_ent);
 }
 
@@ -41,7 +70,11 @@ enqueue_task_wrr(struct rq *rq, struct task_struct *p, int flags)
 	struct sched_wrr_entity *wrr_se = &p->wrr;
 	struct wrr_rq *rq_wrr = &rq->wrr;
 
+	rq_wrr->enqueues++;
+	printk("!! enqueuing %d\n", task_tgid_vnr(p));
+	printk("time slice: %d\n", wrr_se->time_slice);
 	wrr_se->time_slice = wrr_se->weight * BASE_TICKS;
+	printk("time slice: %d\n", wrr_se->time_slice);
 
 	raw_spin_lock(&rq_wrr->lock); /* the locking is mainly for later, part 2 */
 	rq_wrr->total_weight += wrr_se->weight;
@@ -55,11 +88,19 @@ dequeue_task_wrr(struct rq *rq, struct task_struct *p, int flags)
 	struct sched_wrr_entity *wrr_se = &p->wrr;
 	struct wrr_rq *rq_wrr = &rq->wrr;
 
+	printk("!! dequeuing %d with time_slice %d and flags %d\n", task_tgid_vnr(p), wrr_se->time_slice, flags);
+
+	rq_wrr->dequeues++;
+
 	/* the locking is mainly for later, part 2 */
 	raw_spin_lock(&rq_wrr->lock); 
 	rq_wrr->total_weight -= wrr_se->weight;
 	wrr_se->time_slice = 0;
+	//printk("4444 %d %d ptr: 0x%x\n", task_tgid_vnr(p), cpu_of(rq), (unsigned int)&wrr_se->run_list);
+	if ((int)rq_wrr->total_weight < 0)
+		printk("problem! enqueues: %d dequeues: %d\n", rq_wrr->enqueues, rq_wrr->dequeues);
 	list_del(&wrr_se->run_list);
+	//printk("5555 %d %d ptr: 0x%x\n", task_tgid_vnr(p), cpu_of(rq), (unsigned int)&rq_wrr->lock);
 	raw_spin_unlock(&rq_wrr->lock);	
 }
 
@@ -71,16 +112,14 @@ static void task_tick_wrr(struct rq *rq, struct task_struct *curr, int queued)
 {
 	struct sched_wrr_entity *wrr_se = &curr->wrr;
 
+	//printk("ticking %d: %d ms remain\n", task_tgid_vnr(curr), wrr_se->time_slice);
+
 	wrr_se->time_slice--; 
-	if (wrr_se->time_slice == 0) {
+	if (wrr_se->time_slice <= 0) {
+		printk("out of time %d\n", task_tgid_vnr(curr));
 		dequeue_task_wrr(rq, curr, 0);
 		enqueue_task_wrr(rq, curr, 0);
-
-		/* this lock is required by resched_task() */
-		/* but we could instead call set_tsk_need_resched() here ...? */
-		raw_spin_lock(&task_rq(curr)->lock);
-		resched_task(curr);
-		raw_spin_unlock(&task_rq(curr)->lock);
+		set_tsk_need_resched(curr);
 	}
 }
 
@@ -114,7 +153,7 @@ prio_changed_wrr(struct rq *rq, struct task_struct *p, int oldprio)
 
 static unsigned int get_rr_interval_wrr(struct rq *rq, struct task_struct *task)
 {
-	// TODO: implement this
+	// TODO: implement this?
 	return 0;
 }
 
