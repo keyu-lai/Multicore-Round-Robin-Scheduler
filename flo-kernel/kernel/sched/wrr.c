@@ -22,7 +22,6 @@ select_task_rq_wrr(struct task_struct *p, int sd_flag, int flags)
 		this_cpu_rq = cpu_rq(i);
 		this_cpu_wrr = &this_cpu_rq->wrr;
 		raw_spin_lock(&this_cpu_wrr->lock);
-		//printk("cpu %d weight: %d\n", i, this_cpu_wrr->total_weight);
 		if (this_cpu_wrr->total_weight < lowest_weight) {
 			lightest_load_cpu = i;
 			lowest_weight = this_cpu_wrr->total_weight;
@@ -34,7 +33,6 @@ select_task_rq_wrr(struct task_struct *p, int sd_flag, int flags)
 		this_cpu_wrr = &this_cpu_rq->wrr;
 		raw_spin_unlock(&this_cpu_wrr->lock);
 	}
-	//printk("choosing cpu %d\n", lightest_load_cpu);
 	return lightest_load_cpu;
 }
 #endif /* CONFIG_SMP */
@@ -58,12 +56,8 @@ static struct task_struct *pick_next_task_wrr(struct rq *rq)
 		raw_spin_unlock(&rq->wrr.lock);
 		return NULL;
 	}
-
-	//printk("picking wrr task\n");
-
 	sched_ent = list_first_entry(queue, struct sched_wrr_entity, run_list);
 	raw_spin_unlock(&rq->wrr.lock);	
-	//printk("picked wrr task 0x%x\n", (int)sched_ent);
 	return wrr_task_of(sched_ent);
 }
 
@@ -73,24 +67,12 @@ enqueue_task_wrr(struct rq *rq, struct task_struct *p, int flags)
 	struct sched_wrr_entity *wrr_se = &p->wrr;
 	struct wrr_rq *rq_wrr = &rq->wrr;
 
-	//printk("!! enqueuing %d\n", task_tgid_vnr(p));
 	rq_wrr->enqueues++;
-	//printk("time slice: %d\n", wrr_se->time_slice);
 	wrr_se->time_slice = wrr_se->weight * BASE_TICKS;
-	//printk("time slice: %d\n", wrr_se->time_slice);
-
 	raw_spin_lock(&rq_wrr->lock); /* the locking is mainly for later, part 2 */
 	rq_wrr->total_weight += wrr_se->weight;
 	list_add_tail(&wrr_se->run_list, &rq_wrr->queue);
-
-	/*printk("run_list next now: 0x%x\n", (int)wrr_se->run_list.next);
-	printk("run_list prev now: 0x%x\n", (int)wrr_se->run_list.prev);
-	printk("queue next now: 0x%x\n", (int)rq_wrr->queue.next);
-	printk("queue prev now: 0x%x\n", (int)rq_wrr->queue.prev);*/
-
-
 	raw_spin_unlock(&rq_wrr->lock);
-//	printk("!! enqueued %d\n", task_tgid_vnr(p));	
 }
 
 static void
@@ -98,32 +80,13 @@ dequeue_task_wrr(struct rq *rq, struct task_struct *p, int flags)
 {
 	struct sched_wrr_entity *wrr_se = &p->wrr;
 	struct wrr_rq *rq_wrr = &rq->wrr;
-
-
-	//printk("!! dequeuing  with time_slice %d and flags %d\n", /*task_tgid_vnr(p),*/ wrr_se->time_slice, flags);
-	//printk("(dequeuing sched_ent 0x%x)\n", (int)wrr_se);
 	rq_wrr->dequeues++;
 
 	/* the locking is mainly for later, part 2 */
 	raw_spin_lock(&rq_wrr->lock); 
 	rq_wrr->total_weight -= wrr_se->weight;
 	wrr_se->time_slice = 0;
-
-	//printk("4444 %d %d ptr: 0x%x\n", task_tgid_vnr(p), cpu_of(rq), (unsigned int)&wrr_se->run_list);
-	//if ((int)rq_wrr->total_weight < 0)
-	//	printk("problem! enqueues: %d dequeues: %d\n", rq_wrr->enqueues, rq_wrr->dequeues);
-
-	//printk("run_list next now: 0x%x\n", (int)wrr_se->run_list.next);
-	//printk("run_list prev now: 0x%x\n", (int)wrr_se->run_list.prev);
-
-
 	list_del(&wrr_se->run_list);
-	
-	
-	//printk("queue next now: 0x%x\n", (int)rq_wrr->queue.next);
-	//printk("queue prev now: 0x%x\n", (int)rq_wrr->queue.prev);
-	//printk("5555 %d %d ptr: 0x%x\n", task_tgid_vnr(p), cpu_of(rq), (unsigned int)&rq_wrr->lock);
-
 	raw_spin_unlock(&rq_wrr->lock);	
 }
 
@@ -135,11 +98,8 @@ static void task_tick_wrr(struct rq *rq, struct task_struct *curr, int queued)
 {
 	struct sched_wrr_entity *wrr_se = &curr->wrr;
 
-	//printk("ticking %d: %d ms remain\n", task_tgid_vnr(curr), wrr_se->time_slice*10);
-
 	wrr_se->time_slice--; 
 	if (wrr_se->time_slice <= 0) {
-		//printk("out of time %d\n", task_tgid_vnr(curr));
 		dequeue_task_wrr(rq, curr, 0);
 		enqueue_task_wrr(rq, curr, 0);
 		set_tsk_need_resched(curr);
@@ -158,7 +118,6 @@ static bool is_foreground(struct task_struct *p)
 
 static void switched_to_wrr(struct rq *rq, struct task_struct *p)
 {
-	printk("switching %d to use wrr\n", task_tgid_vnr(p));
 	p->wrr.rq = &rq->wrr;
 	p->wrr.weight = (is_foreground(p) ? WEIGHT_FG : WEIGHT_BG);
 	p->wrr.time_slice = p->wrr.weight;
@@ -167,7 +126,7 @@ static void switched_to_wrr(struct rq *rq, struct task_struct *p)
 
 static void switched_from_wrr(struct rq *rq, struct task_struct *p)
 {
-	// TODO: implement this
+	// TODO: implement this?
 }
 
 static void

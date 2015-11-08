@@ -14,8 +14,10 @@ int main (void)
 	int rc, i;
 	struct sched_param param;
 
-	/*fork();
-	fork();*/
+	fork();
+	fork();
+	fork();
+	fork();
 	pid = getpid();
 
 	param.sched_priority = 0;
