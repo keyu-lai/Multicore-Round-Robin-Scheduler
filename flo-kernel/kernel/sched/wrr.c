@@ -22,7 +22,7 @@ select_task_rq_wrr(struct task_struct *p, int sd_flag, int flags)
 		this_cpu_rq = cpu_rq(i);
 		this_cpu_wrr = &this_cpu_rq->wrr;
 		raw_spin_lock(&this_cpu_wrr->lock);
-		printk("cpu %d weight: %d\n", i, this_cpu_wrr->total_weight);
+		//printk("cpu %d weight: %d\n", i, this_cpu_wrr->total_weight);
 		if (this_cpu_wrr->total_weight < lowest_weight) {
 			lightest_load_cpu = i;
 			lowest_weight = this_cpu_wrr->total_weight;
@@ -34,7 +34,7 @@ select_task_rq_wrr(struct task_struct *p, int sd_flag, int flags)
 		this_cpu_wrr = &this_cpu_rq->wrr;
 		raw_spin_unlock(&this_cpu_wrr->lock);
 	}
-	printk("choosing cpu %d\n", lightest_load_cpu);
+	//printk("choosing cpu %d\n", lightest_load_cpu);
 	return lightest_load_cpu;
 }
 #endif /* CONFIG_SMP */
@@ -73,7 +73,7 @@ enqueue_task_wrr(struct rq *rq, struct task_struct *p, int flags)
 	struct sched_wrr_entity *wrr_se = &p->wrr;
 	struct wrr_rq *rq_wrr = &rq->wrr;
 
-	printk("!! enqueuing %d\n", task_tgid_vnr(p));
+	//printk("!! enqueuing %d\n", task_tgid_vnr(p));
 	rq_wrr->enqueues++;
 	//printk("time slice: %d\n", wrr_se->time_slice);
 	wrr_se->time_slice = wrr_se->weight * BASE_TICKS;
@@ -139,7 +139,7 @@ static void task_tick_wrr(struct rq *rq, struct task_struct *curr, int queued)
 
 	wrr_se->time_slice--; 
 	if (wrr_se->time_slice <= 0) {
-		printk("out of time %d\n", task_tgid_vnr(curr));
+		//printk("out of time %d\n", task_tgid_vnr(curr));
 		dequeue_task_wrr(rq, curr, 0);
 		enqueue_task_wrr(rq, curr, 0);
 		set_tsk_need_resched(curr);
