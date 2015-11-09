@@ -403,6 +403,7 @@ struct rq {
 	unsigned long nr_uninterruptible;
 
 	struct task_struct *curr, *idle, *stop;
+	unsigned long next_balance_wrr;
 	unsigned long next_balance;
 	struct mm_struct *prev_mm;
 
@@ -879,6 +880,7 @@ extern const struct sched_class idle_sched_class;
 
 #ifdef CONFIG_SMP
 
+extern void trigger_load_balance_wrr(struct rq *rq, int cpu);
 extern void trigger_load_balance(struct rq *rq, int cpu);
 extern void idle_balance(int this_cpu, struct rq *this_rq);
 
@@ -896,6 +898,7 @@ extern void update_max_interval(void);
 extern void update_group_power(struct sched_domain *sd, int cpu);
 extern int update_runtime(struct notifier_block *nfb, unsigned long action, void *hcpu);
 extern void init_sched_rt_class(void);
+extern void init_sched_wrr_class(void);
 extern void init_sched_fair_class(void);
 
 extern void resched_task(struct task_struct *p);

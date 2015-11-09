@@ -1,4 +1,5 @@
 #include "sched.h"
+#include <linux/interrupt.h>
 
 #define WEIGHT_FG	10
 #define WEIGHT_BG 	1
@@ -33,6 +34,10 @@ select_task_rq_wrr(struct task_struct *p, int sd_flag, int flags)
 		this_cpu_wrr = &this_cpu_rq->wrr;
 		raw_spin_unlock(&this_cpu_wrr->lock);
 	}
+
+	if (lightest_load_cpu == -1)
+		return task_cpu(p);
+
 	return lightest_load_cpu;
 }
 #endif /* CONFIG_SMP */
@@ -140,6 +145,31 @@ static unsigned int get_rr_interval_wrr(struct rq *rq, struct task_struct *task)
 	return 0;
 }
 
+/* ------------------------ Load Balance ------------------------ */
+void trigger_load_balance_wrr(struct rq *rq, int cpu)
+{
+	/* not sure about the checking */
+	/* likely(!on_null_domain(cpu))???? */
+	if (time_after_eq(jiffies, rq->next_balance_wrr))
+		raise_softirq(SCHED_SOFTIRQ_WRR);
+}
+
+static void load_balance_wrr(struct softirq_action *h)
+{
+	int this_cpu = smp_processor_id();
+	struct rq *this_rq = cpu_rq(this_cpu);
+	this_rq->next_balance_wrr = jiffies + HZ/2;
+	// printk("Load Balancing: cpu %d!!\n", this_cpu);
+}
+
+__init void init_sched_wrr_class(void)
+{
+#ifdef CONFIG_SMP
+	open_softirq(SCHED_SOFTIRQ_WRR, load_balance_wrr);
+#endif
+}
+
+/* ------------------------ Load Balance ------------------------ */
 
 const struct sched_class wrr_sched_class = {
 	.next 				= &fair_sched_class,

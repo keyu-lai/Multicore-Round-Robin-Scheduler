@@ -3055,6 +3055,7 @@ void scheduler_tick(void)
 
 #ifdef CONFIG_SMP
 	rq->idle_balance = idle_cpu(cpu);
+	trigger_load_balance_wrr(rq, cpu);
 	trigger_load_balance(rq, cpu);
 #endif
 }
@@ -7064,6 +7065,7 @@ void __init sched_init(void)
 		rq->cpu_power = SCHED_POWER_SCALE;
 		rq->post_schedule = 0;
 		rq->active_balance = 0;
+		rq->next_balance_wrr = jiffies;
 		rq->next_balance = jiffies;
 		rq->push_cpu = 0;
 		rq->cpu = i;
@@ -7120,6 +7122,7 @@ void __init sched_init(void)
 		zalloc_cpumask_var(&cpu_isolated_map, GFP_NOWAIT);
 #endif
 	init_sched_fair_class();
+	init_sched_wrr_class();
 
 	scheduler_running = 1;
 }
