@@ -430,6 +430,7 @@ enum
 	BLOCK_SOFTIRQ,
 	BLOCK_IOPOLL_SOFTIRQ,
 	TASKLET_SOFTIRQ,
+	SCHED_SOFTIRQ_WRR,
 	SCHED_SOFTIRQ,
 	HRTIMER_SOFTIRQ,
 	RCU_SOFTIRQ,    /* Preferable RCU should always be the last softirq */
