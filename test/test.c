@@ -11,19 +11,20 @@
 int main (void)
 {
 	pid_t pid;
-	int rc, i;
-	struct sched_param param;
+	int /*rc,*/ i;
+	//struct sched_param param;
 
+	fork();
 	fork();
 	fork();
 	fork();
 	fork();
 	pid = getpid();
 
-	param.sched_priority = 0;
-	rc = sched_setscheduler(0, SCHED_WRR, &param);
-	printf("rc = %d %s\n", rc, strerror(errno));
-	fflush(stdout);
+	//param.sched_priority = 0;
+	//rc = sched_setscheduler(0, SCHED_WRR, &param);
+	//printf("rc = %d %s\n", rc, strerror(errno));
+	//fflush(stdout);
 	while (1) {
 		printf("i'm running! %d\n", pid);
 		fflush(stdout);
