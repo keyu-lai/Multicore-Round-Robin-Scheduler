@@ -589,9 +589,8 @@ static inline void set_task_rq(struct task_struct *p, unsigned int cpu)
 	p->rt.parent = tg->rt_se[cpu];
 #endif
 	
-	/* change wrr se when task moves from fg/bg */
+	/* wrr.weight is set elsewhere by p->sched_class->prio_changed() */
 	p->wrr.rq = &cpu_rq(smp_processor_id())->wrr;
-	p->wrr.weight = 10; //TODO: set this correctly based on fg/bg!
 }
 
 #else /* CONFIG_CGROUP_SCHED */
