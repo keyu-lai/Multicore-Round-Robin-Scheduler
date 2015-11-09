@@ -1742,7 +1742,7 @@ static void __sched_fork(struct task_struct *p)
 #endif
 
 	/* set up part of wrr se when forking */
-	/* wrr.rq and wrr.weight are set in kernel/sched/sched.h:set_task_rq() */
+	/* wrr.rq is set in kernel/sched/sched.h:set_task_rq() */
 	p->wrr.time_slice = 0;
 	INIT_LIST_HEAD(&p->wrr.run_list);
 }
@@ -1794,6 +1794,8 @@ void sched_fork(struct task_struct *p)
 
 	if (p->sched_class->task_fork)
 		p->sched_class->task_fork(p);
+	if (p->policy == SCHED_WRR)
+		p->sched_class->prio_changed(cpu_rq(cpu), p, 0);
 
 	/*
 	 * The child is not yet in the pid-hash so no cgroup attach races,
@@ -7387,6 +7389,10 @@ void sched_move_task(struct task_struct *tsk)
 	else
 #endif
 		set_task_rq(tsk, task_cpu(tsk));
+
+	if (tsk->policy == SCHED_WRR) {
+		tsk->sched_class->prio_changed(rq, tsk, 0);
+	}
 
 	if (unlikely(running))
 		tsk->sched_class->set_curr_task(rq);
