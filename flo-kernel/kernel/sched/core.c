@@ -83,6 +83,7 @@
 
 #include "sched.h"
 #include "../workqueue_sched.h"
+#include "wrr.h"
 
 #define CREATE_TRACE_POINTS
 #include <trace/events/sched.h>
@@ -8336,3 +8337,13 @@ struct cgroup_subsys cpuacct_subsys = {
 	.subsys_id = cpuacct_subsys_id,
 };
 #endif	/* CONFIG_CGROUP_CPUACCT */
+
+SYSCALL_DEFINE1(get_wrr_info, struct wrr_info __user *, wrr_info)
+{
+	return 0;
+}
+
+SYSCALL_DEFINE2(set_wrr_weights, int, fg_weight, int, bg_weight)
+{
+	return 0;
+}

@@ -404,6 +404,8 @@
 #define __NR_setns			(__NR_SYSCALL_BASE+375)
 #define __NR_process_vm_readv		(__NR_SYSCALL_BASE+376)
 #define __NR_process_vm_writev		(__NR_SYSCALL_BASE+377)
+#define __NR_get_wrr_info		(__NR_SYSCALL_BASE+378)
+#define __NR_set_wrr_weights		(__NR_SYSCALL_BASE+379)
 
 /*
  * The following SWIs are ARM private.
