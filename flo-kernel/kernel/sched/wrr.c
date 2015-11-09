@@ -67,7 +67,6 @@ enqueue_task_wrr(struct rq *rq, struct task_struct *p, int flags)
 	struct sched_wrr_entity *wrr_se = &p->wrr;
 	struct wrr_rq *rq_wrr = &rq->wrr;
 
-	rq_wrr->enqueues++;
 	wrr_se->time_slice = wrr_se->weight * BASE_TICKS;
 	raw_spin_lock(&rq_wrr->lock); /* the locking is mainly for later, part 2 */
 	rq_wrr->total_weight += wrr_se->weight;
@@ -80,7 +79,6 @@ dequeue_task_wrr(struct rq *rq, struct task_struct *p, int flags)
 {
 	struct sched_wrr_entity *wrr_se = &p->wrr;
 	struct wrr_rq *rq_wrr = &rq->wrr;
-	rq_wrr->dequeues++;
 
 	/* the locking is mainly for later, part 2 */
 	raw_spin_lock(&rq_wrr->lock); 
@@ -88,6 +86,13 @@ dequeue_task_wrr(struct rq *rq, struct task_struct *p, int flags)
 	wrr_se->time_slice = 0;
 	list_del(&wrr_se->run_list);
 	raw_spin_unlock(&rq_wrr->lock);	
+}
+
+static void yield_task_wrr(struct rq *rq)
+{
+	dequeue_task_wrr(rq, current, 0);
+	enqueue_task_wrr(rq, current, 0);
+	/* schedule() is about to be called by sys_sched_yield() */
 }
 
 static void put_prev_task_wrr(struct rq *rq, struct task_struct *prev)
@@ -104,6 +109,11 @@ static void task_tick_wrr(struct rq *rq, struct task_struct *curr, int queued)
 		enqueue_task_wrr(rq, curr, 0);
 		set_tsk_need_resched(curr);
 	}
+}
+
+static void task_fork_wrr(struct task_struct *p)
+{
+	//trace_printk("hi! i'm forking a child. love, %d\n", task_tgid_vnr(current));
 }
 
 static void set_curr_task_wrr(struct rq *rq)
@@ -145,6 +155,7 @@ const struct sched_class wrr_sched_class = {
 	.next 				= &fair_sched_class,
 	.enqueue_task		= enqueue_task_wrr,
 	.dequeue_task		= dequeue_task_wrr,
+	.yield_task 		= yield_task_wrr,
 	.check_preempt_curr	= check_preempt_curr_wrr,
 	.pick_next_task		= pick_next_task_wrr,
 	.put_prev_task		= put_prev_task_wrr,
@@ -154,6 +165,7 @@ const struct sched_class wrr_sched_class = {
 #endif
 	.set_curr_task      = set_curr_task_wrr,
 	.task_tick			= task_tick_wrr,
+	.task_fork			= task_fork_wrr,
 	.get_rr_interval	= get_rr_interval_wrr,
 	.prio_changed		= prio_changed_wrr,
 	.switched_to		= switched_to_wrr,

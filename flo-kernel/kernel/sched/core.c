@@ -1790,7 +1790,7 @@ void sched_fork(struct task_struct *p)
 	}
 
 	if (!rt_prio(p->prio))
-		p->sched_class = &fair_sched_class;
+		p->sched_class = &wrr_sched_class;
 
 	if (p->sched_class->task_fork)
 		p->sched_class->task_fork(p);
@@ -4121,7 +4121,7 @@ recheck:
 	/*
 	 * Valid priorities for SCHED_FIFO and SCHED_RR are
 	 * 1..MAX_USER_RT_PRIO-1, valid priority for SCHED_NORMAL,
-	 * SCHED_BATCH and SCHED_IDLE is 0.
+	 * SCHED_BATCH, SCHED_IDLE and SCHED_WRR is 0.
 	 */
 	if (param->sched_priority < 0 ||
 	    (p->mm && param->sched_priority > MAX_USER_RT_PRIO-1) ||
@@ -7053,8 +7053,6 @@ void __init sched_init(void)
 		INIT_LIST_HEAD(&rq->wrr.queue);
 		rq->wrr.lock = __RAW_SPIN_LOCK_UNLOCKED(lock);
 		rq->wrr.total_weight = 0;
-		rq->wrr.enqueues = 0;
-		rq->wrr.dequeues = 0;
 		// we'll need to do some initialization for load balancing here
 		/* done with wrr */
 
@@ -7109,9 +7107,18 @@ void __init sched_init(void)
 	calc_load_update = jiffies + LOAD_FREQ;
 
 	/*
-	 * During early bootup we pretend to be a normal task:
+	 * Previously, this comment read:
+	 * "During early bootup we pretend to be a normal task:"
+	 * I'm not sure exactly what it means by pretend, since the
+	 * scheduler really is being started, but it seemed like a good
+	 * place to do this part of the setup for making init use wrr.
+	 * init_task.policy is set to SCHED_WRR in init_task.h, and some
+	 * static initialization of init_task.wrr is also done there.
+	 * init's children are set to use wrr in sched_fork()
+	 * -jcc
 	 */
-	current->sched_class = &fair_sched_class;
+	current->sched_class = &wrr_sched_class;
+	current->wrr.rq = &cpu_rq(smp_processor_id())->wrr;
 
 #ifdef CONFIG_SMP
 	zalloc_cpumask_var(&sched_domains_tmpmask, GFP_NOWAIT);

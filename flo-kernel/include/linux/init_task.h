@@ -147,7 +147,7 @@ extern struct cred init_cred;
 	.prio		= MAX_PRIO-20,					\
 	.static_prio	= MAX_PRIO-20,					\
 	.normal_prio	= MAX_PRIO-20,					\
-	.policy		= SCHED_NORMAL,					\
+	.policy		= SCHED_WRR,					\
 	.cpus_allowed	= CPU_MASK_ALL,					\
 	.mm		= NULL,						\
 	.active_mm	= &init_mm,					\
@@ -156,11 +156,16 @@ extern struct cred init_cred;
 	},								\
 	.rt		= {						\
 		.run_list	= LIST_HEAD_INIT(tsk.rt.run_list),	\
-		.time_slice	= RR_TIMESLICE,				\
-		.nr_cpus_allowed = NR_CPUS,				\
-	},								\
+		.time_slice	= RR_TIMESLICE,						\
+		.nr_cpus_allowed = NR_CPUS,						\
+	},													\
+	.wrr 	= {											\
+		.run_list 	= LIST_HEAD_INIT(tsk.wrr.run_list),	\
+		.weight 	= 10,								\
+		.time_slice	= 10,								\
+	},													\
 	.tasks		= LIST_HEAD_INIT(tsk.tasks),			\
-	INIT_PUSHABLE_TASKS(tsk)					\
+	INIT_PUSHABLE_TASKS(tsk)							\
 	.ptraced	= LIST_HEAD_INIT(tsk.ptraced),			\
 	.ptrace_entry	= LIST_HEAD_INIT(tsk.ptrace_entry),		\
 	.real_parent	= &tsk,						\
