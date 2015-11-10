@@ -317,6 +317,7 @@ struct wrr_rq {
 
 	struct list_head queue;
 	unsigned int total_weight;
+	int nr_running;
 };
 
 #ifdef CONFIG_SMP

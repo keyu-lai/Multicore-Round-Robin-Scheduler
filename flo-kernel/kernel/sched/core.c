@@ -7053,8 +7053,8 @@ void __init sched_init(void)
 
 		/* handle wrr initialization here */
 		INIT_LIST_HEAD(&rq->wrr.queue);
-		rq->wrr.lock = __RAW_SPIN_LOCK_UNLOCKED(lock);
 		rq->wrr.total_weight = 0;
+		rq->wrr.nr_running = 0;
 		// we'll need to do some initialization for load balancing here
 		/* done with wrr */
 
@@ -7121,6 +7121,7 @@ void __init sched_init(void)
 	 */
 	current->sched_class = &wrr_sched_class;
 	current->wrr.rq = &cpu_rq(smp_processor_id())->wrr;
+	current->wrr.rq->nr_running++;
 
 #ifdef CONFIG_SMP
 	zalloc_cpumask_var(&sched_domains_tmpmask, GFP_NOWAIT);
