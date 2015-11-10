@@ -17,16 +17,16 @@ select_task_rq_wrr(struct task_struct *p, int sd_flag, int flags)
 	struct rq *this_cpu_rq;
 	struct wrr_rq *this_cpu_wrr;
 
-	rcu_read_lock();
 	for_each_possible_cpu(i) {
 		this_cpu_rq = cpu_rq(i);
+		raw_spin_lock(&this_cpu_rq->lock);
 		this_cpu_wrr = &this_cpu_rq->wrr;
 		if (this_cpu_wrr->total_weight < lowest_weight) {
 			lightest_load_cpu = i;
 			lowest_weight = this_cpu_wrr->total_weight; 
 		}
+		raw_spin_unlock(&this_cpu_rq->lock);
 	}
-	rcu_read_unlock();
 
 	return lightest_load_cpu;
 }
@@ -207,10 +207,13 @@ static void load_balance_wrr(struct softirq_action *h)
 	struct sched_wrr_entity *se_wrr;
 	struct task_struct *p;
 	unsigned long flags;
+	struct rq *tmp_rq;
 
-	rcu_read_lock();
 	for_each_possible_cpu(tmp_cpu) {
-		tmp_weight = (cpu_rq(tmp_cpu)->wrr).total_weight;
+		tmp_rq = cpu_rq(tmp_cpu);
+		raw_spin_lock(&tmp_rq->lock);
+		tmp_weight = (tmp_rq->wrr).total_weight;
+		raw_spin_unlock(&tmp_rq->lock);
 		if (tmp_weight > max_weight) {
 			submax_weight = max_weight;
 			max_cpu = tmp_cpu;
@@ -225,7 +228,6 @@ static void load_balance_wrr(struct softirq_action *h)
 			submin_weight = tmp_weight;
 		cpu_cnt++;
 	}
-	rcu_read_unlock();
 
 	printk("Loading balance: %d %d %d %d !!", min_weight, submin_weight, submax_weight, max_weight);
 	printk(" max: %d; min: %d\n", max_cpu, min_cpu);

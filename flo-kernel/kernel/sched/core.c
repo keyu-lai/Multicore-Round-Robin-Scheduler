@@ -8359,15 +8359,17 @@ SYSCALL_DEFINE1(get_wrr_info, struct wrr_info __user *, wrr_info)
 	int cpu_cnt = 0;
 	struct wrr_info buf;
 	struct wrr_rq wrr_rq;
+	struct rq *rq;
 
-	rcu_read_lock();
 	for_each_possible_cpu(cpu_tmp) {
-		wrr_rq = cpu_rq(cpu_tmp)->wrr;
+		rq = cpu_rq(cpu_tmp);
+		raw_spin_lock(&rq->lock);
+		wrr_rq = rq->wrr;
 		buf.nr_running[cpu_tmp] = wrr_rq.nr_running;
 		buf.total_weight[cpu_tmp] = wrr_rq.total_weight;
 		cpu_cnt++;
+		raw_spin_unlock(&rq->lock);
 	}
-	rcu_read_unlock();
 	buf.num_cpus = cpu_cnt;
 	if (copy_to_user(wrr_info, &buf, sizeof(struct wrr_info)))
 		return -EINVAL;	
