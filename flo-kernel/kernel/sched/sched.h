@@ -312,10 +312,8 @@ struct rt_rq {
 };
 
 struct wrr_rq {
-	/* locking rule: when acquiring multiple wrr_rq locks,
-		acquire them in cpu_id order */	
-	/* Nests inside the rq lock: */
-	raw_spinlock_t lock;
+	/* we'll just rely on the existing main rq.lock */
+	//raw_spinlock_t lock;
 
 	struct list_head queue;
 	unsigned int total_weight;
