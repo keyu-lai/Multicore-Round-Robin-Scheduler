@@ -60,12 +60,9 @@ enqueue_task_wrr(struct rq *rq, struct task_struct *p, int flags)
 	struct wrr_rq *rq_wrr = &rq->wrr;
 
 	wrr_se->time_slice = wrr_se->weight * BASE_TICKS;
-	//trace_printk("enqueuing - flag %d - previous total weight: %d\ttasks: %d\n", flags, rq_wrr->total_weight, rq_wrr->nr_running);
 	rq_wrr->total_weight += wrr_se->weight;
 	rq_wrr->nr_running++;
-	//trace_printk("enqueuing - flag %d -           task weight: %d\n", flags, wrr_se->weight);
 	list_add_tail(&wrr_se->run_list, &rq_wrr->queue);
-	//trace_printk("enqueuing - flag %d -      new total weight: %d\ttasks: %d\n", flags, rq_wrr->total_weight, rq_wrr->nr_running);
 }
 
 /* dequeue's many callers all hold the rq lock */
@@ -75,13 +72,10 @@ dequeue_task_wrr(struct rq *rq, struct task_struct *p, int flags)
 	struct sched_wrr_entity *wrr_se = &p->wrr;
 	struct wrr_rq *rq_wrr = &rq->wrr;
 
-	//trace_printk("dequeuing - flag %d - previous total weight: %d\ttasks: %d\n", flags, rq_wrr->total_weight, rq_wrr->nr_running);
 	rq_wrr->total_weight -= wrr_se->weight;
 	rq_wrr->nr_running--;
-	//trace_printk("dequeuing - flag %d -           task weight: %d\n", flags, wrr_se->weight);
 	wrr_se->time_slice = 0;
 	list_del(&wrr_se->run_list);
-	//trace_printk("dequeuing - flag %d -      new total weight: %d\ttasks: %d\n", flags, rq_wrr->total_weight, rq_wrr->nr_running);
 }
 
 /* sys_sched_yield(), which calls this, holds the rq lock */
@@ -161,12 +155,8 @@ prio_changed_wrr(struct rq *rq, struct task_struct *p, int oldprio)
 	struct sched_wrr_entity *wrr_se = &p->wrr;
 	unsigned int new_weight = choose_weight(p);
 
-	if (new_weight != wrr_se->weight /*&& p->on_rq*/) {
-		//trace_printk("!!! previous task weight: %d\n", wrr_se->weight);
-		wrr_se->weight = new_weight;
-		//trace_printk("! now in foreground? %d   on rq? %d\n", is_foreground(p), p->on_rq);
-		//trace_printk("!!! new task weight: %d\n", wrr_se->weight);
-	}
+	if (new_weight != wrr_se->weight) 
+		wrr_se->weight = new_weight;	
 }
 
 static unsigned int get_rr_interval_wrr(struct rq *rq, struct task_struct *task)
