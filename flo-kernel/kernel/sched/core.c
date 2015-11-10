@@ -7125,6 +7125,7 @@ void __init sched_init(void)
 	current->sched_class = &wrr_sched_class;
 	current->wrr.rq = &cpu_rq(smp_processor_id())->wrr;
 	current->wrr.rq->nr_running++;
+	current->wrr.rq->total_weight += current->wrr.weight;
 
 #ifdef CONFIG_SMP
 	zalloc_cpumask_var(&sched_domains_tmpmask, GFP_NOWAIT);

@@ -229,7 +229,11 @@ static void load_balance_wrr(struct softirq_action *h)
 		cpu_cnt++;
 	}
 
-	printk("Loading balance: %d %d %d %d !!", min_weight, submin_weight, submax_weight, max_weight);
+	printk("Loading balance: %d %d %d %d !! %d %d %d %d !! ", 
+		cpu_rq(0)->wrr.total_weight, cpu_rq(1)->wrr.total_weight, 
+		cpu_rq(2)->wrr.total_weight, cpu_rq(3)->wrr.total_weight,
+		cpu_rq(0)->wrr.nr_running, cpu_rq(1)->wrr.nr_running, 
+		cpu_rq(2)->wrr.nr_running, cpu_rq(3)->wrr.nr_running);
 	printk(" max: %d; min: %d\n", max_cpu, min_cpu);
 
 	if (cpu_cnt <= 1)
