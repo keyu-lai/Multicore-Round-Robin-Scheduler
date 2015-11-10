@@ -16,29 +16,17 @@ select_task_rq_wrr(struct task_struct *p, int sd_flag, int flags)
 	struct rq *this_cpu_rq;
 	struct wrr_rq *this_cpu_wrr;
 
-	/* I don't like the fact that I have to grab every lock here,
-	 	so I wonder if there's a better way ... rt and cfs use rcu_read_lock
-	 	can we use that here? */
-
-	/* locking rule: when acquiring multiple wrr_rq locks,
-		acquire them in cpu_id order */
-	//rcu_read_lock();
+	rcu_read_lock();
 	for_each_possible_cpu(i) {
 		this_cpu_rq = cpu_rq(i);
 		this_cpu_wrr = &this_cpu_rq->wrr;
-		//raw_spin_lock(&this_cpu_wrr->lock);
 		if (this_cpu_wrr->total_weight < lowest_weight) {
 			lightest_load_cpu = i;
 			lowest_weight = this_cpu_wrr->total_weight; // shouldn't this rarely be 0?
 		}
 	}
-	//rcu_read_unlock();
+	rcu_read_unlock();
 
-	/*for (i = num_possible_cpus() - 1; i >= 0; i--) {
-		this_cpu_rq = cpu_rq(i);
-		this_cpu_wrr = &this_cpu_rq->wrr;
-		raw_spin_unlock(&this_cpu_wrr->lock);
-	}*/
 	return lightest_load_cpu;
 }
 #endif /* CONFIG_SMP */
@@ -58,13 +46,9 @@ static struct task_struct *pick_next_task_wrr(struct rq *rq)
 	struct list_head *queue = &rq->wrr.queue;
 	struct sched_wrr_entity *sched_ent;
 
-	//raw_spin_lock(&rq->wrr.lock); /* the locking is mainly for later, part 2 */
-	if (list_empty(queue)) {
-		//raw_spin_unlock(&rq->wrr.lock);
+	if (list_empty(queue)) 
 		return NULL;
-	}
 	sched_ent = list_first_entry(queue, struct sched_wrr_entity, run_list);
-	//raw_spin_unlock(&rq->wrr.lock);	
 	return wrr_task_of(sched_ent);
 }
 
@@ -75,13 +59,11 @@ enqueue_task_wrr(struct rq *rq, struct task_struct *p, int flags)
 	struct wrr_rq *rq_wrr = &rq->wrr;
 
 	wrr_se->time_slice = wrr_se->weight * BASE_TICKS;
-	//raw_spin_lock(&rq_wrr->lock); /* the locking is mainly for later, part 2 */
 	trace_printk("enqueuing - flag %d - previous total weight: %d\n", flags, rq_wrr->total_weight);
 	rq_wrr->total_weight += wrr_se->weight;
 	trace_printk("enqueuing - flag %d -           task weight: %d\n", flags, wrr_se->weight);
 	list_add_tail(&wrr_se->run_list, &rq_wrr->queue);
 	trace_printk("enqueuing - flag %d -      new total weight: %d\n", flags, rq_wrr->total_weight);
-	//raw_spin_unlock(&rq_wrr->lock);
 }
 
 static void
@@ -90,15 +72,12 @@ dequeue_task_wrr(struct rq *rq, struct task_struct *p, int flags)
 	struct sched_wrr_entity *wrr_se = &p->wrr;
 	struct wrr_rq *rq_wrr = &rq->wrr;
 
-	/* the locking is mainly for later, part 2 */
-	//raw_spin_lock(&rq_wrr->lock); 
 	trace_printk("dequeuing - flag %d - previous total weight: %d\n", flags, rq_wrr->total_weight);
 	rq_wrr->total_weight -= wrr_se->weight;
 	trace_printk("dequeuing - flag %d -           task weight: %d\n", flags, wrr_se->weight);
 	wrr_se->time_slice = 0;
 	list_del(&wrr_se->run_list);
 	trace_printk("dequeuing - flag %d -      new total weight: %d\n", flags, rq_wrr->total_weight);
-	//raw_spin_unlock(&rq_wrr->lock);	
 }
 
 /* sys_sched_yield(), which calls this, holds the rq lock */
@@ -162,9 +141,7 @@ static bool is_foreground(struct task_struct *p)
 
 static unsigned int choose_weight(struct task_struct *p)
 {
-	//trace_printk("!!!! choosing weight! \n");
 	return (is_foreground(p) ? WEIGHT_FG : WEIGHT_BG);
-	//return 10;
 }
 
 static void switched_to_wrr(struct rq *rq, struct task_struct *p)
@@ -193,7 +170,6 @@ static void switched_from_wrr(struct rq *rq, struct task_struct *p)
 static void
 prio_changed_wrr(struct rq *rq, struct task_struct *p, int oldprio)
 {
-	//struct wrr_rq *wrr_rq = &rq->wrr;
 	struct sched_wrr_entity *wrr_se = &p->wrr;
 	unsigned int new_weight = choose_weight(p);
 
