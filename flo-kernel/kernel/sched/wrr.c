@@ -1,5 +1,6 @@
 #include "sched.h"
 #include <linux/limits.h>
+#include <linux/interrupt.h>
 
 #define WEIGHT_FG	10
 #define WEIGHT_BG 	1
@@ -164,6 +165,105 @@ static unsigned int get_rr_interval_wrr(struct rq *rq, struct task_struct *task)
 	return 0;
 }
 
+/* ------------------------ Periodic load balancing ------------------------ */
+static void move_task(struct task_struct *p, struct rq *from_rq, 
+		      struct rq *to_rq) {
+	deactivate_task(from_rq, p, 0);
+	set_task_cpu(p, to_rq->cpu);
+	activate_task(to_rq, p, 0);
+}
+
+static int can_migrate_task_wrr(struct task_struct *p, struct rq *from_rq,
+				struct rq *to_rq) {
+	if (task_rq(p) == to_rq)
+		return 0;
+	if (!cpumask_test_cpu(to_rq->cpu, tsk_cpus_allowed(p)))
+		return 0;
+	if (task_running(from_rq, p))
+		return 0;
+	if (!cpu_online(to_rq->cpu))
+		return 0;
+	return 1;
+}
+
+void trigger_load_balance_wrr(struct rq *rq, int cpu)
+{
+	if (time_after_eq(jiffies, rq->next_balance_wrr)) {
+		rq->next_balance_wrr = jiffies + HZ/2;
+		if (cpu == 0)
+			raise_softirq(SCHED_SOFTIRQ_WRR);
+	}
+}
+
+static void load_balance_wrr(struct softirq_action *h)
+{
+	int tmp_cpu, max_cpu = 0, min_cpu = 0;
+	int cpu_cnt = 0;
+	unsigned int tmp_weight, max_weight = 0, min_weight = INT_MAX;
+	unsigned int submax_weight = 0;
+	unsigned int submin_weight = INT_MAX;
+	struct rq *from_rq;
+	struct rq *to_rq;
+	struct sched_wrr_entity *se_wrr;
+	struct task_struct *p;
+	unsigned long flags;
+
+	rcu_read_lock();
+	for_each_possible_cpu(tmp_cpu) {
+		tmp_weight = (cpu_rq(tmp_cpu)->wrr).total_weight;
+		if (tmp_weight > max_weight) {
+			submax_weight = max_weight;
+			max_cpu = tmp_cpu;
+			max_weight = tmp_weight;
+		} else if (tmp_weight > submax_weight)
+			submax_weight = tmp_weight;
+		if (tmp_weight < min_weight) {
+			submin_weight = min_weight;
+			min_cpu = tmp_cpu;
+			min_weight = tmp_weight;
+		} else if (tmp_weight < submin_weight)
+			submin_weight = tmp_weight;
+		cpu_cnt++;
+	}
+	rcu_read_unlock();
+
+	printk("Loading balance: %d %d %d %d !!", min_weight, submin_weight, submax_weight, max_weight);
+	printk(" max: %d; min: %d\n", max_cpu, min_cpu);
+
+	if (cpu_cnt <= 1)
+		return;
+	if (max_weight <= min_weight)
+		return;
+
+	from_rq = cpu_rq(max_cpu);
+	to_rq = cpu_rq(min_cpu);
+
+	local_irq_save(flags);
+	double_rq_lock(to_rq, from_rq);
+	list_for_each_entry(se_wrr, &from_rq->wrr.queue, run_list) {
+			    p = wrr_task_of(se_wrr);
+		/* The move should not cause the imbalance to reverse */
+		if (max_weight - p->wrr.weight < submin_weight &&
+		    min_weight + p->wrr.weight > submax_weight)
+			continue;
+		if (!can_migrate_task_wrr(p, from_rq, to_rq))
+			continue;
+		printk("Balaning: %d to %d\n", max_cpu, min_cpu);
+		move_task(p, from_rq, to_rq);
+		break;
+	}
+	double_rq_unlock(to_rq, from_rq);
+	local_irq_restore(flags);
+}
+
+__init void init_sched_wrr_class(void)
+{
+#ifdef CONFIG_SMP
+	open_softirq(SCHED_SOFTIRQ_WRR, load_balance_wrr);
+#endif
+}
+
+/* ------------------------ Periodic load balancing ------------------------ */
 
 const struct sched_class wrr_sched_class = {
 	.next 				= &fair_sched_class,

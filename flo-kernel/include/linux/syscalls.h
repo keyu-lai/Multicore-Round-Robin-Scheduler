@@ -63,6 +63,7 @@ struct getcpu_cache;
 struct old_linux_dirent;
 struct perf_event_attr;
 struct file_handle;
+struct wrr_info;
 
 #include <linux/types.h>
 #include <linux/aio_abi.h>
@@ -857,5 +858,7 @@ asmlinkage long sys_process_vm_writev(pid_t pid,
 				      const struct iovec __user *rvec,
 				      unsigned long riovcnt,
 				      unsigned long flags);
+asmlinkage long sys_get_wrr_info(struct wrr_info __user *wrr_info);
+asmlinkage long sys_set_wrr_weights(int fg_weight, int bg_weight);
 
 #endif
