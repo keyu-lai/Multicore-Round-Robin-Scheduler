@@ -3244,9 +3244,16 @@ need_resched:
 
 	pre_schedule(rq, prev);
 
-	if (unlikely(!rq->nr_running))
-		idle_balance(cpu, rq);
-
+	if (unlikely(!rq->nr_running)) {
+		if (prev->policy == SCHED_WRR) {
+			cur_wrr = &rq->wrr;
+			
+			if (cur_wrr->total_weight == 0)
+				idle_balance_wrr(cpu,rq);
+		}
+		else idle_balance(cpu, rq);
+	}
+	
 	put_prev_task(rq, prev);
 	next = pick_next_task(rq);
 	clear_tsk_need_resched(prev);
