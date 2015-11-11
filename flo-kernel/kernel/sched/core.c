@@ -3251,8 +3251,7 @@ need_resched:
 
 			if (cur_wrr->total_weight == 0)
 				idle_balance_wrr(cpu, rq);
-		}
-		else
+		} else
 			idle_balance(cpu, rq);
 	}
 

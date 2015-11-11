@@ -367,3 +367,4 @@ const struct sched_class wrr_sched_class = {
 	.prio_changed		= prio_changed_wrr,
 	.switched_to		= switched_to_wrr,
 };
+
