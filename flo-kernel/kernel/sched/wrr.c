@@ -2,13 +2,10 @@
 #include <linux/limits.h>
 #include <linux/sched.h>
 #include <linux/interrupt.h>
+#include "wrr.h"
 
-#define WEIGHT_FG	10
-#define WEIGHT_BG 	1
-#define BASE_TICKS 	1
-
-#define FLAG_YIELD	999999
-#define FLAG_TICK	777777
+int WEIGHT_FG = 10;
+int WEIGHT_BG = 1;
 
 #ifdef CONFIG_SMP
 static int
