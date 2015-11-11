@@ -228,13 +228,6 @@ static void load_balance_wrr(struct softirq_action *h)
 		cpu_cnt++;
 	}
 
-	printk("Loading balance: %d %d %d %d !! %d %d %d %d !! ", 
-		cpu_rq(0)->wrr.total_weight, cpu_rq(1)->wrr.total_weight, 
-		cpu_rq(2)->wrr.total_weight, cpu_rq(3)->wrr.total_weight,
-		cpu_rq(0)->wrr.nr_running, cpu_rq(1)->wrr.nr_running, 
-		cpu_rq(2)->wrr.nr_running, cpu_rq(3)->wrr.nr_running);
-	printk(" max: %d; min: %d\n", max_cpu, min_cpu);
-
 	if (cpu_cnt <= 1)
 		return;
 	if (max_weight <= min_weight)
@@ -253,7 +246,6 @@ static void load_balance_wrr(struct softirq_action *h)
 			continue;
 		if (!can_migrate_task_wrr(p, from_rq, to_rq))
 			continue;
-		printk("Balaning: %d to %d\n", max_cpu, min_cpu);
 		move_task(p, from_rq, to_rq);
 		break;
 	}
@@ -286,7 +278,6 @@ static int idle_load_balance_wrr(struct rq *idle_rq)
 	unsigned int tmp_weight = 0;
 	struct sched_wrr_entity *wrr_se;
 	
-	//printk(KERN_DEBUG "Idle runq CPU:%d TW:%d\n",cpu_of(idle_rq),(&idle_rq->wrr)->total_weight);
 	raw_spin_unlock(&idle_rq->lock);
 	for_each_possible_cpu(i) {
 		tmp_rq = cpu_rq(i);
@@ -299,7 +290,7 @@ static int idle_load_balance_wrr(struct rq *idle_rq)
 		tmp_weight = tmp_wrr->total_weight;
 		raw_spin_unlock(&tmp_rq->lock);
 		
-		//idle_rq already locked so need to lock
+		/* idle_rq already locked so need to lock */
 		if (tmp_weight > busiest_weight) {
 			busiest_cpu = i;
 			busiest_weight = tmp_wrr->total_weight;
@@ -317,7 +308,6 @@ static int idle_load_balance_wrr(struct rq *idle_rq)
 	double_lock_balance(idle_rq, busiest_rq);
 
 	list_for_each_entry(wrr_se, &busiest_rq->wrr.queue, run_list) {
-		//printk(KERN_DEBUG "Enter the entry loop\n");
 		p = wrr_task_of(wrr_se);
 		
 		if (!can_migrate_task_wrr(p, busiest_rq, idle_rq)) 
@@ -339,14 +329,11 @@ void idle_balance_wrr(int this_cpu, struct rq *this_rq)
 	struct sched_domain *sd;
 	struct wrr_rq *cur_wrr;
 	int pulled_task = 0;
-	//unsigned long next_balance = jiffies + HZ;
 	
 	this_rq->idle_stamp = this_rq->clock;
 
 	rcu_read_lock();
-	for_each_domain(this_cpu, sd) {
-		//unsigned long interval;
-		
+	for_each_domain(this_cpu, sd) {		
 		cur_wrr = &this_rq->wrr;
 		if (cur_wrr->total_weight == 0)
 			pulled_task = idle_load_balance_wrr(this_rq);
