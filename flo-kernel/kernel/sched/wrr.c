@@ -17,16 +17,16 @@ select_task_rq_wrr(struct task_struct *p, int sd_flag, int flags)
 	struct rq *this_cpu_rq;
 	struct wrr_rq *this_cpu_wrr;
 
+	rcu_read_lock();
 	for_each_possible_cpu(i) {
 		this_cpu_rq = cpu_rq(i);
-		raw_spin_lock(&this_cpu_rq->lock);
 		this_cpu_wrr = &this_cpu_rq->wrr;
 		if (this_cpu_wrr->total_weight < lowest_weight) {
 			lightest_load_cpu = i;
 			lowest_weight = this_cpu_wrr->total_weight; 
 		}
-		raw_spin_unlock(&this_cpu_rq->lock);
 	}
+	rcu_read_unlock();
 
 	return lightest_load_cpu;
 }
@@ -207,13 +207,10 @@ static void load_balance_wrr(struct softirq_action *h)
 	struct sched_wrr_entity *se_wrr;
 	struct task_struct *p;
 	unsigned long flags;
-	struct rq *tmp_rq;
 
+	rcu_read_lock();
 	for_each_possible_cpu(tmp_cpu) {
-		tmp_rq = cpu_rq(tmp_cpu);
-		raw_spin_lock(&tmp_rq->lock);
-		tmp_weight = (tmp_rq->wrr).total_weight;
-		raw_spin_unlock(&tmp_rq->lock);
+		tmp_weight = (cpu_rq(tmp_cpu)->wrr).total_weight;
 		if (tmp_weight > max_weight) {
 			submax_weight = max_weight;
 			max_cpu = tmp_cpu;
@@ -228,12 +225,9 @@ static void load_balance_wrr(struct softirq_action *h)
 			submin_weight = tmp_weight;
 		cpu_cnt++;
 	}
+	rcu_read_unlock();
 
-	printk("Loading balance: %d %d %d %d !! %d %d %d %d !! ", 
-		cpu_rq(0)->wrr.total_weight, cpu_rq(1)->wrr.total_weight, 
-		cpu_rq(2)->wrr.total_weight, cpu_rq(3)->wrr.total_weight,
-		cpu_rq(0)->wrr.nr_running, cpu_rq(1)->wrr.nr_running, 
-		cpu_rq(2)->wrr.nr_running, cpu_rq(3)->wrr.nr_running);
+	printk("Loading balance: %d %d %d %d !!", min_weight, submin_weight, submax_weight, max_weight);
 	printk(" max: %d; min: %d\n", max_cpu, min_cpu);
 
 	if (cpu_cnt <= 1)
@@ -247,7 +241,7 @@ static void load_balance_wrr(struct softirq_action *h)
 	local_irq_save(flags);
 	double_rq_lock(to_rq, from_rq);
 	list_for_each_entry(se_wrr, &from_rq->wrr.queue, run_list) {
-			    p = wrr_task_of(se_wrr);
+		p = wrr_task_of(se_wrr);
 		/* The move should not cause the imbalance to reverse */
 		if (max_weight - p->wrr.weight < submin_weight &&
 		    min_weight + p->wrr.weight > submax_weight)
@@ -270,6 +264,101 @@ __init void init_sched_wrr_class(void)
 }
 
 /* ------------------------ Periodic load balancing ------------------------ */
+
+/* ------------------------ Idle load balancing ------------------------ */
+static int idle_load_balance_wrr(struct rq *idle_rq)
+{
+	int i;
+	unsigned int highest_weight = 0;
+	int highest_cpu =-1;
+	int pulled_tasks = 0;
+	int cpu_cnt = 0;
+	struct rq *highest_rq = NULL;
+	struct rq *tmp_rq;
+	struct wrr_rq *tmp_wrr;
+	struct task_struct *p;
+	unsigned long flags;
+	struct sched_wrr_entity *wrr_se;
+	
+	//printk(KERN_DEBUG "Idle runq CPU:%d TW:%d\n",cpu_of(idle_rq),(&idle_rq->wrr)->total_weight);
+	rcu_read_lock();
+	for_each_possible_cpu(i) {
+		tmp_rq = cpu_rq(i);
+		tmp_wrr = &tmp_rq->wrr;
+
+		if (tmp_wrr->total_weight > highest_weight) {
+			highest_cpu = i;
+			highest_weight = tmp_wrr->total_weight;
+		}
+		
+		cpu_cnt++;
+	}
+	rcu_read_unlock();
+	
+	highest_rq = cpu_rq(highest_cpu);
+	if (cpu_cnt <=0 || highest_cpu < 0 || highest_rq == idle_rq || (&idle_rq->wrr)->total_weight != 0)
+		return 0;
+	
+	local_irq_save(flags);
+	double_rq_lock(idle_rq, highest_rq);
+	//double_lock_balance(idle_rq, highest_rq);
+	
+	//printk(KERN_DEBUG "Perform balancing for busiest cpu:%d and idle cpu:%d\n",cpu_of(highest_rq), cpu_of(idle_rq));
+	list_for_each_entry(wrr_se, &highest_rq->wrr.queue, run_list) {
+		//printk(KERN_DEBUG "Enter the entry loop\n");
+		p = wrr_task_of(wrr_se);
+		
+		if (!can_migrate_task_wrr(p, highest_rq, idle_rq)) 
+			continue;
+			//printk(KERN_DEBUG "PID:%d is good to move\n",p->pid);
+			//Refer from sched_move_task() in core.c for these lines of codes
+			
+		//move_task(p, highest_rq, idle_rq);
+		pulled_tasks++;
+	}
+	
+	double_rq_unlock(idle_rq, highest_rq);
+	//double_unlock_balance(idle_rq, highest_rq);
+	local_irq_restore(flags);
+	
+	return pulled_tasks;
+}
+
+void idle_balance_wrr(int this_cpu, struct rq *this_rq)
+{
+	struct sched_domain *sd;
+	struct wrr_rq *cur_wrr;
+	int pulled_task = 0;
+	//unsigned long next_balance = jiffies + HZ;
+	
+	raw_spin_unlock(&this_rq->lock);
+	this_rq->idle_stamp = this_rq->clock;
+
+	rcu_read_lock();
+	for_each_domain(this_cpu, sd) {
+		//unsigned long interval;
+		
+		cur_wrr = &this_rq->wrr;
+		if (cur_wrr->total_weight == 0)
+			pulled_task = idle_load_balance_wrr(this_rq);
+
+		/*interval = msecs_to_jiffies(sd->balance_interval);
+		if (time_after(next_balance, sd->last_balance + interval))
+			next_balance = sd->last_balance + interval;*/
+		
+		if (pulled_task) {
+			this_rq->idle_stamp = 0;
+			break;
+		}
+	}
+
+	rcu_read_unlock();
+	raw_spin_lock(&this_rq->lock);
+	/*if (pulled_task || time_after(jiffies, this_rq->next_balance)) {
+		this_rq->next_balance = next_balance;
+	}*/
+}
+/* ------------------------ Idle load balancing ------------------------ */
 
 const struct sched_class wrr_sched_class = {
 	.next 				= &fair_sched_class,
