@@ -65,6 +65,12 @@ enqueue_task_wrr(struct rq *rq, struct task_struct *p, int flags)
 	rq_wrr->total_weight += wrr_se->weight;
 	rq_wrr->nr_running++;
 	list_add_tail(&wrr_se->run_list, &rq_wrr->queue);
+	
+	printk(KERN_DEBUG "Running Stat: %d %d %d %d !! %d %d %d %d !! ", 
+		cpu_rq(0)->wrr.total_weight, cpu_rq(1)->wrr.total_weight, 
+		cpu_rq(2)->wrr.total_weight, cpu_rq(3)->wrr.total_weight,
+		cpu_rq(0)->wrr.nr_running, cpu_rq(1)->wrr.nr_running, 
+		cpu_rq(2)->wrr.nr_running, cpu_rq(3)->wrr.nr_running);
 }
 
 /* dequeue's many callers all hold the rq lock */
@@ -316,15 +322,15 @@ static int idle_load_balance_wrr(struct rq *idle_rq)
 		if (!can_migrate_task_wrr(p, busiest_rq, idle_rq)) 
 			continue;
 		
-		printk("Before idle balance: IRW:%d BRW:%d IRT:%d BRT:%d\n", 
-			idle_rq->wrr.total_weight, busiest_rq->wrr.total_weight, 
-			idle_rq->wrr.nr_running, busiest_rq->wrr.nr_running);
+		//printk("Before idle balance: IRW:%d BRW:%d IRT:%d BRT:%d\n", 
+			//idle_rq->wrr.total_weight, busiest_rq->wrr.total_weight, 
+			//idle_rq->wrr.nr_running, busiest_rq->wrr.nr_running);
 		
 		move_task(p, busiest_rq, idle_rq);
 		pulled_tasks++;
-		printk("After idle balance: IRW:%d BRW:%d IRT:%d BRT:%d\n", 
-			idle_rq->wrr.total_weight, busiest_rq->wrr.total_weight, 
-			idle_rq->wrr.nr_running, busiest_rq->wrr.nr_running);
+		//printk("After idle balance: IRW:%d BRW:%d IRT:%d BRT:%d\n", 
+			//idle_rq->wrr.total_weight, busiest_rq->wrr.total_weight, 
+			//idle_rq->wrr.nr_running, busiest_rq->wrr.nr_running);
 		break;
 	}
 	
@@ -341,7 +347,6 @@ void idle_balance_wrr(int this_cpu, struct rq *this_rq)
 	int pulled_task = 0;
 	//unsigned long next_balance = jiffies + HZ;
 	
-	raw_spin_unlock(&this_rq->lock);
 	this_rq->idle_stamp = this_rq->clock;
 
 	rcu_read_lock();
@@ -363,7 +368,6 @@ void idle_balance_wrr(int this_cpu, struct rq *this_rq)
 	}
 
 	rcu_read_unlock();
-	raw_spin_lock(&this_rq->lock);
 	/*if (pulled_task || time_after(jiffies, this_rq->next_balance)) {
 		this_rq->next_balance = next_balance;
 	}*/
