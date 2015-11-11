@@ -1,0 +1,16 @@
+For benchmarking, we used Geekbench 3 from the Google Play store. For each configuration, we booted the device and waited a minute or two to let everything settle down and make sure there weren't too many other tasks running. We ran the standard Geekbench test 3 times for each configuration, and took the average value for the single- and multi-core scores. For our kernel, we adjusted the foreground task weight multiplier. The default was 10, to let each foreground task run for 100ms. We also tried 1, which gives a 10ms time slice, 5 for 50ms, 15 for 150ms, and 20 for 200ms. 
+
+Configuration	| Single core	| Multi core
+---------------------------------------------
+Stock kernel	| 580		| 1811 
+Our kernel, 10	| 585		| 1811
+Our kernel, 1	| 583		| 1132	
+Our kernel, 5	| 586		| 1395
+Our kernel, 15	| 562		| 1816
+Our kernel, 20 	| 560		| 1758
+
+
+We consulted the following resources:
+http://www.makelinux.net/books/lkd2/ch10lev1sec2
+http://www.linuxjournal.com/magazine/real-time-linux-kernel-scheduler
+http://www.embedded.com/design/operating-systems/4204971/Real-Time-Linux-Scheduling-Part-2
