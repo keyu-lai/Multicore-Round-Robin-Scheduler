@@ -3202,7 +3202,6 @@ static void __sched __schedule(void)
 	struct task_struct *prev, *next;
 	unsigned long *switch_count;
 	struct rq *rq;
-	struct wrr_rq *cur_wrr;
 	int cpu;
 
 need_resched:
@@ -3245,17 +3244,8 @@ need_resched:
 
 	pre_schedule(rq, prev);
 
-	if (unlikely(!rq->nr_running)) {
-		if (prev->policy == SCHED_WRR) {
-			cur_wrr = &rq->wrr;
-	
-			if (cur_wrr->total_weight == 0)
-				idle_balance_wrr(cpu, rq);
-		}
-		else {
-			idle_balance(cpu, rq);
-		}
-	}
+	if (unlikely(!rq->nr_running))
+		idle_balance(cpu, rq);
 
 	put_prev_task(rq, prev);
 	next = pick_next_task(rq);
@@ -7135,6 +7125,7 @@ void __init sched_init(void)
 	current->sched_class = &wrr_sched_class;
 	current->wrr.rq = &cpu_rq(smp_processor_id())->wrr;
 	current->wrr.rq->nr_running++;
+	current->wrr.rq->total_weight += current->wrr.weight;
 
 #ifdef CONFIG_SMP
 	zalloc_cpumask_var(&sched_domains_tmpmask, GFP_NOWAIT);
@@ -8369,15 +8360,17 @@ SYSCALL_DEFINE1(get_wrr_info, struct wrr_info __user *, wrr_info)
 	int cpu_cnt = 0;
 	struct wrr_info buf;
 	struct wrr_rq wrr_rq;
+	struct rq *rq;
 
-	rcu_read_lock();
 	for_each_possible_cpu(cpu_tmp) {
-		wrr_rq = cpu_rq(cpu_tmp)->wrr;
+		rq = cpu_rq(cpu_tmp);
+		raw_spin_lock(&rq->lock);
+		wrr_rq = rq->wrr;
 		buf.nr_running[cpu_tmp] = wrr_rq.nr_running;
 		buf.total_weight[cpu_tmp] = wrr_rq.total_weight;
 		cpu_cnt++;
+		raw_spin_unlock(&rq->lock);
 	}
-	rcu_read_unlock();
 	buf.num_cpus = cpu_cnt;
 	if (copy_to_user(wrr_info, &buf, sizeof(struct wrr_info)))
 		return -EINVAL;	
