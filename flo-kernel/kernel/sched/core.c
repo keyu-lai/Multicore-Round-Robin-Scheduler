@@ -8381,12 +8381,18 @@ SYSCALL_DEFINE1(get_wrr_info, struct wrr_info __user *, wrr_info)
 	}
 	buf.num_cpus = cpu_cnt;
 	if (copy_to_user(wrr_info, &buf, sizeof(struct wrr_info)))
-		return -EINVAL;	
+		return -EINVAL;
 	return 0;
 }
 
 SYSCALL_DEFINE2(set_wrr_weights, int, fg_weight, int, bg_weight)
 {
+	if (current_uid() != 0)
+		return -EPERM;
+
+	WEIGHT_FG = fg_weight;
+	WEIGHT_BG = bg_weight;
+
 	return 0;
 }
 

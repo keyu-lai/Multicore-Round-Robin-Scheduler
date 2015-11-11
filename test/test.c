@@ -1,37 +1,37 @@
-#include <stdio.h>
 #include <stdlib.h>
+#include <stdio.h>
 #include <unistd.h>
-#include <sys/ioctl.h>
-#include <sched.h>
+#include <sys/syscall.h>
 #include <errno.h>
 #include <string.h>
+#include "test.h"
 
-#define SCHED_WRR 	6
-
-int main (void)
+int main(int argc, char *argv[])
 {
-	pid_t pid;
-	int /*rc,*/ i;
-	//struct sched_param param;
+	int fg_weight;
+	int bg_weight;
+	int i;
+	struct wrr_info buf;
 
-	fork();
-	fork();
-	fork();
-	fork();
-	fork();
-	pid = getpid();
+	if (argc == 3) {
+		fg_weight = atoi(argv[1]);
+		bg_weight = atoi(argv[2]);
+		if (syscall(379, fg_weight, bg_weight)) {
+			printf("error: %s\n", strerror(errno));
+			exit(EXIT_FAILURE);
+		}
+	}
 
-	//param.sched_priority = 0;
-	//rc = sched_setscheduler(0, SCHED_WRR, &param);
-	//printf("rc = %d %s\n", rc, strerror(errno));
-	//fflush(stdout);
 	while (1) {
-		printf("i'm running! %d\n", pid);
-		fflush(stdout);
-		for (i = 0; i < 10000000; i++);
-		/*printf("i'm going to sleep! %d\n", pid);
-		fflush(stdout);
-		sleep(1);*/
+		if (syscall(378, &buf)) {
+			printf("error: %s\n", strerror(errno));
+			exit(EXIT_FAILURE);		
+		}
+		for (i = 0; i < buf.num_cpus; i++) {
+			printf("cpu%d: %d, %d\n", i, buf.nr_running[i],
+				buf.total_weight[i]);
+		}
+		usleep(300000);
 	}
 	return 0;
 }
