@@ -3202,6 +3202,7 @@ static void __sched __schedule(void)
 	struct task_struct *prev, *next;
 	unsigned long *switch_count;
 	struct rq *rq;
+	struct wrr_rq *cur_wrr;
 	int cpu;
 
 need_resched:

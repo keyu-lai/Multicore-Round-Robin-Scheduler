@@ -1,5 +1,6 @@
 #include "sched.h"
 #include <linux/limits.h>
+#include <linux/sched.h>
 #include <linux/interrupt.h>
 
 #define WEIGHT_FG	10
@@ -270,6 +271,104 @@ __init void init_sched_wrr_class(void)
 }
 
 /* ------------------------ Periodic load balancing ------------------------ */
+
+/* ------------------------ Idle load balancing ------------------------ */
+static int idle_load_balance_wrr(struct rq *idle_rq)
+{
+	int i;
+	unsigned int busiest_weight = 0;
+	int busiest_cpu =-1;
+	int pulled_tasks = 0;
+	int cpu_cnt = 0;
+	struct rq *busiest_rq = NULL;
+	struct rq *tmp_rq;
+	struct wrr_rq *tmp_wrr;
+	struct task_struct *p;
+	unsigned long flags;
+	struct sched_wrr_entity *wrr_se;
+	
+	//printk(KERN_DEBUG "Idle runq CPU:%d TW:%d\n",cpu_of(idle_rq),(&idle_rq->wrr)->total_weight);
+	rcu_read_lock();
+	for_each_possible_cpu(i) {
+		tmp_rq = cpu_rq(i);
+		tmp_wrr = &tmp_rq->wrr;
+
+		if (tmp_wrr->total_weight > busiest_weight) {
+			busiest_cpu = i;
+			busiest_weight = tmp_wrr->total_weight;
+		}
+		
+		cpu_cnt++;
+	}
+	rcu_read_unlock();
+	
+	busiest_rq = cpu_rq(busiest_cpu);
+	if (cpu_cnt <=0 || busiest_cpu < 0 || busiest_rq == idle_rq || (&idle_rq->wrr)->total_weight != 0)
+		return 0;
+	
+	local_irq_save(flags);
+	double_lock_balance(idle_rq, busiest_rq);
+
+	list_for_each_entry(wrr_se, &busiest_rq->wrr.queue, run_list) {
+		//printk(KERN_DEBUG "Enter the entry loop\n");
+		p = wrr_task_of(wrr_se);
+		
+		if (!can_migrate_task_wrr(p, busiest_rq, idle_rq)) 
+			continue;
+		
+		printk("Before idle balance: IRW:%d BRW:%d IRT:%d BRT:%d\n", 
+			idle_rq->wrr.total_weight, busiest_rq->wrr.total_weight, 
+			idle_rq->wrr.nr_running, busiest_rq->wrr.nr_running);
+		
+		move_task(p, busiest_rq, idle_rq);
+		pulled_tasks++;
+		printk("After idle balance: IRW:%d BRW:%d IRT:%d BRT:%d\n", 
+			idle_rq->wrr.total_weight, busiest_rq->wrr.total_weight, 
+			idle_rq->wrr.nr_running, busiest_rq->wrr.nr_running);
+		break;
+	}
+	
+	double_unlock_balance(idle_rq, busiest_rq);
+	local_irq_restore(flags);
+	
+	return pulled_tasks;
+}
+
+void idle_balance_wrr(int this_cpu, struct rq *this_rq)
+{
+	struct sched_domain *sd;
+	struct wrr_rq *cur_wrr;
+	int pulled_task = 0;
+	//unsigned long next_balance = jiffies + HZ;
+	
+	raw_spin_unlock(&this_rq->lock);
+	this_rq->idle_stamp = this_rq->clock;
+
+	rcu_read_lock();
+	for_each_domain(this_cpu, sd) {
+		//unsigned long interval;
+		
+		cur_wrr = &this_rq->wrr;
+		if (cur_wrr->total_weight == 0)
+			pulled_task = idle_load_balance_wrr(this_rq);
+
+		/*interval = msecs_to_jiffies(sd->balance_interval);
+		if (time_after(next_balance, sd->last_balance + interval))
+			next_balance = sd->last_balance + interval;*/
+		
+		if (pulled_task) {
+			this_rq->idle_stamp = 0;
+			break;
+		}
+	}
+
+	rcu_read_unlock();
+	raw_spin_lock(&this_rq->lock);
+	/*if (pulled_task || time_after(jiffies, this_rq->next_balance)) {
+		this_rq->next_balance = next_balance;
+	}*/
+}
+/* ------------------------ Idle load balancing ------------------------ */
 
 const struct sched_class wrr_sched_class = {
 	.next 				= &fair_sched_class,
