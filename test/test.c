@@ -25,7 +25,7 @@ int main(int argc, char *argv[])
 	while (1) {
 		if (syscall(378, &buf)) {
 			printf("error: %s\n", strerror(errno));
-			exit(EXIT_FAILURE);		
+			exit(EXIT_FAILURE);
 		}
 		for (i = 0; i < buf.num_cpus; i++) {
 			printf("cpu%d: %d, %d\n", i, buf.nr_running[i],

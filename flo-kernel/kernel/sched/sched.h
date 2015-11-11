@@ -313,7 +313,6 @@ struct rt_rq {
 
 struct wrr_rq {
 	/* we'll just rely on the existing main rq.lock */
-	//raw_spinlock_t lock;
 
 	struct list_head queue;
 	unsigned int total_weight;
@@ -588,7 +587,7 @@ static inline void set_task_rq(struct task_struct *p, unsigned int cpu)
 	p->rt.rt_rq  = tg->rt_rq[cpu];
 	p->rt.parent = tg->rt_se[cpu];
 #endif
-	
+
 	/* wrr.weight is set elsewhere by p->sched_class->prio_changed() */
 	p->wrr.rq = &cpu_rq(smp_processor_id())->wrr;
 }
