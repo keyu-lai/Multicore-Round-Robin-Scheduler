@@ -65,12 +65,7 @@ enqueue_task_wrr(struct rq *rq, struct task_struct *p, int flags)
 	rq_wrr->total_weight += wrr_se->weight;
 	rq_wrr->nr_running++;
 	list_add_tail(&wrr_se->run_list, &rq_wrr->queue);
-	
-	printk(KERN_DEBUG "Running Stat: %d %d %d %d !! %d %d %d %d !! ", 
-		cpu_rq(0)->wrr.total_weight, cpu_rq(1)->wrr.total_weight, 
-		cpu_rq(2)->wrr.total_weight, cpu_rq(3)->wrr.total_weight,
-		cpu_rq(0)->wrr.nr_running, cpu_rq(1)->wrr.nr_running, 
-		cpu_rq(2)->wrr.nr_running, cpu_rq(3)->wrr.nr_running);
+
 }
 
 /* dequeue's many callers all hold the rq lock */
@@ -291,22 +286,31 @@ static int idle_load_balance_wrr(struct rq *idle_rq)
 	struct wrr_rq *tmp_wrr;
 	struct task_struct *p;
 	unsigned long flags;
+	unsigned int tmp_weight = 0;
 	struct sched_wrr_entity *wrr_se;
 	
 	//printk(KERN_DEBUG "Idle runq CPU:%d TW:%d\n",cpu_of(idle_rq),(&idle_rq->wrr)->total_weight);
-	rcu_read_lock();
+	raw_spin_unlock(&idle_rq->lock);
 	for_each_possible_cpu(i) {
 		tmp_rq = cpu_rq(i);
-		tmp_wrr = &tmp_rq->wrr;
 
-		if (tmp_wrr->total_weight > busiest_weight) {
+		if (tmp_rq == idle_rq)
+			continue;
+
+		raw_spin_lock(&tmp_rq->lock);
+		tmp_wrr = &tmp_rq->wrr;
+		tmp_weight = tmp_wrr->total_weight;
+		raw_spin_unlock(&tmp_rq->lock);
+		
+		//idle_rq already locked so need to lock
+		if (tmp_weight > busiest_weight) {
 			busiest_cpu = i;
 			busiest_weight = tmp_wrr->total_weight;
 		}
-		
+
 		cpu_cnt++;
 	}
-	rcu_read_unlock();
+	raw_spin_lock(&idle_rq->lock);
 	
 	busiest_rq = cpu_rq(busiest_cpu);
 	if (cpu_cnt <=0 || busiest_cpu < 0 || busiest_rq == idle_rq || (&idle_rq->wrr)->total_weight != 0)
@@ -321,16 +325,9 @@ static int idle_load_balance_wrr(struct rq *idle_rq)
 		
 		if (!can_migrate_task_wrr(p, busiest_rq, idle_rq)) 
 			continue;
-		
-		//printk("Before idle balance: IRW:%d BRW:%d IRT:%d BRT:%d\n", 
-			//idle_rq->wrr.total_weight, busiest_rq->wrr.total_weight, 
-			//idle_rq->wrr.nr_running, busiest_rq->wrr.nr_running);
-		
+
 		move_task(p, busiest_rq, idle_rq);
 		pulled_tasks++;
-		//printk("After idle balance: IRW:%d BRW:%d IRT:%d BRT:%d\n", 
-			//idle_rq->wrr.total_weight, busiest_rq->wrr.total_weight, 
-			//idle_rq->wrr.nr_running, busiest_rq->wrr.nr_running);
 		break;
 	}
 	
@@ -357,20 +354,12 @@ void idle_balance_wrr(int this_cpu, struct rq *this_rq)
 		if (cur_wrr->total_weight == 0)
 			pulled_task = idle_load_balance_wrr(this_rq);
 
-		/*interval = msecs_to_jiffies(sd->balance_interval);
-		if (time_after(next_balance, sd->last_balance + interval))
-			next_balance = sd->last_balance + interval;*/
-		
 		if (pulled_task) {
 			this_rq->idle_stamp = 0;
 			break;
 		}
 	}
-
 	rcu_read_unlock();
-	/*if (pulled_task || time_after(jiffies, this_rq->next_balance)) {
-		this_rq->next_balance = next_balance;
-	}*/
 }
 /* ------------------------ Idle load balancing ------------------------ */
 
