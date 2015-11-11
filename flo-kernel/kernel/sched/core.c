@@ -3248,13 +3248,14 @@ need_resched:
 	if (unlikely(!rq->nr_running)) {
 		if (prev->policy == SCHED_WRR) {
 			cur_wrr = &rq->wrr;
-			
+
 			if (cur_wrr->total_weight == 0)
-				idle_balance_wrr(cpu,rq);
+				idle_balance_wrr(cpu, rq);
 		}
-		else idle_balance(cpu, rq);
+		else
+			idle_balance(cpu, rq);
 	}
-	
+
 	put_prev_task(rq, prev);
 	next = pick_next_task(rq);
 	clear_tsk_need_resched(prev);
@@ -7065,7 +7066,6 @@ void __init sched_init(void)
 		INIT_LIST_HEAD(&rq->wrr.queue);
 		rq->wrr.total_weight = 0;
 		rq->wrr.nr_running = 0;
-		// we'll need to do some initialization for load balancing here
 		/* done with wrr */
 
 #ifdef CONFIG_SMP
@@ -7404,9 +7404,8 @@ void sched_move_task(struct task_struct *tsk)
 #endif
 		set_task_rq(tsk, task_cpu(tsk));
 
-	if (tsk->policy == SCHED_WRR) {
+	if (tsk->policy == SCHED_WRR)
 		tsk->sched_class->prio_changed(rq, tsk, 0);
-	}
 
 	if (unlikely(running))
 		tsk->sched_class->set_curr_task(rq);
